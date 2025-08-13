@@ -1,0 +1,426 @@
+#fuzzy1
+
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+
+#define C 2     // number of clusters
+#define M 1.26  // fuzziness
+#define ITER 5  // fixed iterations
+
+typedef struct {
+    double x, y;
+} Point;
+
+// Euclidean distance between two points
+double distance(Point a, Point b) {
+    return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+int main() {
+    int N;
+    printf("Enter number of data points (n): ");
+    scanf("%d", &N);
+
+    // Allocate memory for points
+    Point *data = (Point *)malloc(N * sizeof(Point));
+    if (!data) {
+        printf("Memory allocation failed!\n");
+        return 1;
+    }
+
+    // Read points
+    for (int i = 0; i < N; i++) {
+        printf("Enter x y for point %d: ", i + 1);
+        scanf("%lf %lf", &data[i].x, &data[i].y);
+    }
+
+    // Membership matrix (user-provided fixed values)
+    double **U = (double **)malloc(N * sizeof(double *));
+    for (int i = 0; i < N; i++) {
+        U[i] = (double *)malloc(C * sizeof(double));
+        printf("Enter membership values for point %d (u1 u2): ", i + 1);
+        scanf("%lf %lf", &U[i][0], &U[i][1]);
+    }
+
+    Point centers[C];
+
+    // FCM iterations
+    for (int iter = 0; iter < ITER; iter++) {
+        printf("\nIteration %d\n", iter + 1);
+
+        // Step 1: Calculate new cluster centers
+        for (int j = 0; j < C; j++) {
+            double num_x = 0.0, num_y = 0.0, den = 0.0;
+            for (int i = 0; i < N; i++) {
+                double u_m = pow(U[i][j], M);
+                num_x += u_m * data[i].x;
+                num_y += u_m * data[i].y;
+                den += u_m;
+            }
+            centers[j].x = num_x / den;
+            centers[j].y = num_y / den;
+        }
+
+        // Print cluster centers
+        for (int j = 0; j < C; j++) {
+            printf("Center %d: (%.4f, %.4f)\n", j + 1, centers[j].x, centers[j].y);
+        }
+
+        // Step 2: Update membership values
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                double sum = 0.0;
+                double dij = distance(data[i], centers[j]);
+                if (dij == 0) { // avoid division by zero
+                    U[i][j] = 1.0;
+                    continue;
+                }
+                for (int k = 0; k < C; k++) {
+                    double dik = distance(data[i], centers[k]);
+                    if (dik == 0) dik = 1e-10;
+                    sum += pow(dij / dik, 2.0 / (M - 1.0));
+                }
+                U[i][j] = 1.0 / sum;
+            }
+        }
+
+        // Print updated memberships
+        printf("Updated Membership Matrix:\n");
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                printf("%.4f ", U[i][j]);
+            }
+            printf("\n");
+        }
+    }
+
+    // Free memory
+    for (int i = 0; i < N; i++) {
+        free(U[i]);
+    }
+
+#fuzzy2
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+
+#define M 1.26 // fuzziness
+
+typedef struct {
+    double x, y;
+} Point;
+
+// Euclidean distance
+double distance(Point a, Point b) {
+    return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+}
+
+// Generate random membership matrix (rows sum to 1)
+void initializeMembership(double **U, int N, int C) {
+    for (int i = 0; i < N; i++) {
+        double sum = 0.0;
+        double *temp = (double *)malloc(C * sizeof(double));
+        for (int j = 0; j < C; j++) {
+            temp[j] = rand() / (double)RAND_MAX;
+            sum += temp[j];
+        }
+        for (int j = 0; j < C; j++) {
+            U[i][j] = temp[j] / sum; // normalize
+        }
+        free(temp);
+    }
+}
+
+int main() {
+    srand(time(NULL));
+
+    int N, C;
+    double theta;
+
+    printf("Enter number of data points (n): ");
+    scanf("%d", &N);
+
+    printf("Enter number of clusters (c > 2): ");
+    scanf("%d", &C);
+    if (C <= 2) {
+        printf("Error: c must be > 2\n");
+        return 1;
+    }
+
+    printf("Enter stopping threshold (theta): ");
+    scanf("%lf", &theta);
+
+    // Allocate points
+    Point *data = (Point *)malloc(N * sizeof(Point));
+    for (int i = 0; i < N; i++) {
+        printf("Enter x y for point %d: ", i + 1);
+        scanf("%lf %lf", &data[i].x, &data[i].y);
+    }
+
+    // Allocate membership matrices
+    double **U = (double **)malloc(N * sizeof(double *));
+    double **U_old = (double **)malloc(N * sizeof(double *));
+    for (int i = 0; i < N; i++) {
+        U[i] = (double *)malloc(C * sizeof(double));
+        U_old[i] = (double *)malloc(C * sizeof(double));
+    }
+
+    // Initialize membership randomly
+    initializeMembership(U, N, C);
+
+    Point *centers = (Point *)malloc(C * sizeof(Point));
+    int iter = 0;
+
+    while (1) {
+        iter++;
+        printf("\nIteration %d\n", iter);
+
+        // Save old membership
+        for (int i = 0; i < N; i++)
+            for (int j = 0; j < C; j++)
+                U_old[i][j] = U[i][j];
+
+        // Step 1: Calculate cluster centers
+        for (int j = 0; j < C; j++) {
+            double num_x = 0.0, num_y = 0.0, den = 0.0;
+            for (int i = 0; i < N; i++) {
+                double u_m = pow(U[i][j], M);
+                num_x += u_m * data[i].x;
+                num_y += u_m * data[i].y;
+                den += u_m;
+            }
+            centers[j].x = num_x / den;
+            centers[j].y = num_y / den;
+        }
+
+        // Print cluster centers
+        for (int j = 0; j < C; j++) {
+            printf("Center %d: (%.5f, %.5f)\n", j + 1, centers[j].x, centers[j].y);
+        }
+
+        // Step 2: Update membership values
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                double sum = 0.0;
+                double dij = distance(data[i], centers[j]);
+                if (dij == 0) {
+                    U[i][j] = 1.0;
+                    continue;
+                }
+                for (int k = 0; k < C; k++) {
+                    double dik = distance(data[i], centers[k]);
+                    if (dik == 0) dik = 1e-10;
+                    sum += pow(dij / dik, 2.0 / (M - 1.0));
+                }
+                U[i][j] = 1.0 / sum;
+            }
+        }
+
+        // Print membership matrix
+        printf("Membership Matrix:\n");
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                printf("%.5f ", U[i][j]);
+            }
+            printf("\n");
+        }
+
+        // Step 3: Check stopping condition
+        double maxDiff = 0.0;
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                double diff = fabs(U[i][j] - U_old[i][j]);
+                if (diff > maxDiff) maxDiff = diff;
+            }
+        }
+
+        if (maxDiff < theta) {
+            printf("\nConverged after %d iterations (max diff = %.6f < theta)\n", iter, maxDiff);
+            break;
+        }
+    }
+
+    // Free memory
+    for (int i = 0; i < N; i++) {
+        free(U[i]);
+        free(U_old[i]);
+    }
+    free(U);
+    free(U_old);
+    free(data);
+    free(centers);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#fuzzy3
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+
+typedef struct {
+    double x, y;
+} Point;
+
+double distance(Point a, Point b) {
+    return sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y));
+}
+
+int main() {
+    int N, C;
+    double m = 1.26; // fuzziness
+    int iterations = 5;
+
+    printf("Enter number of data points: ");
+    scanf("%d", &N);
+
+    printf("Enter number of clusters (c > 2): ");
+    scanf("%d", &C);
+
+    if (C <= 2) {
+        printf("Number of clusters must be > 2.\n");
+        return 1;
+    }
+
+    // Allocate memory
+    Point *data = (Point *)malloc(N * sizeof(Point));
+    double **U = (double **)malloc(N * sizeof(double *));
+    double **U_new = (double **)malloc(N * sizeof(double *));
+    Point *centroids = (Point *)malloc(C * sizeof(Point));
+
+    for (int i = 0; i < N; i++) {
+        U[i] = (double *)malloc(C * sizeof(double));
+        U_new[i] = (double *)malloc(C * sizeof(double));
+    }
+
+    // Input data points
+    for (int i = 0; i < N; i++) {
+        printf("Enter x y for point %d: ", i+1);
+        scanf("%lf %lf", &data[i].x, &data[i].y);
+    }
+
+    srand(time(NULL));
+
+    // Randomly initialize membership matrix so that sum of memberships for each point = 1
+    for (int i = 0; i < N; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < C; j++) {
+            U[i][j] = (double)rand() / RAND_MAX;
+            sum += U[i][j];
+        }
+        for (int j = 0; j < C; j++) {
+            U[i][j] /= sum;
+        }
+    }
+
+    // Iterate
+    for (int t = 0; t < iterations; t++) {
+        // Step 1: Calculate centroids
+        for (int j = 0; j < C; j++) {
+            double num_x = 0, num_y = 0, den = 0;
+            for (int i = 0; i < N; i++) {
+                double u_m = pow(U[i][j], m);
+                num_x += u_m * data[i].x;
+                num_y += u_m * data[i].y;
+                den += u_m;
+            }
+            centroids[j].x = num_x / den;
+            centroids[j].y = num_y / den;
+        }
+
+        // Step 2: Update membership values
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                double sum = 0.0;
+                double dist_ij = distance(data[i], centroids[j]);
+                if (dist_ij == 0) {
+                    U_new[i][j] = 1.0;
+                    continue;
+                }
+                for (int k = 0; k < C; k++) {
+                    double dist_ik = distance(data[i], centroids[k]);
+                    if (dist_ik == 0) dist_ik = 1e-6;
+                    sum += pow(dist_ij / dist_ik, 2.0 / (m - 1.0));
+                }
+                U_new[i][j] = 1.0 / sum;
+            }
+        }
+
+        // Copy new memberships to U
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                U[i][j] = U_new[i][j];
+            }
+        }
+
+        // Print iteration details
+        printf("\nIteration %d:\n", t+1);
+        printf("Centroids:\n");
+        for (int j = 0; j < C; j++) {
+            printf("Cluster %d: %.5lf %.5lf\n", j+1, centroids[j].x, centroids[j].y);
+        }
+        printf("Membership Matrix:\n");
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < C; j++) {
+                printf("%.5lf ", U[i][j]);
+            }
+            printf("\n");
+        }
+    }
+
+    // Free memory
+    for (int i = 0; i < N; i++) {
+        free(U[i]);
+        free(U_new[i]);
+    }
+    free(U);
+    free(U_new);
+    free(centroids);
+    free(data);
+
+    return 0;
+}
+
+
+    free(U);
+    free(data);
+
+    return 0;
+}
