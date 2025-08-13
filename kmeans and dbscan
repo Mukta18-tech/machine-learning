@@ -1,0 +1,558 @@
+/******************************************************************************
+
+                            Online C Compiler.
+                Code, Compile, Run and Debug C program online.
+Write your code in this editor and press "Run" button to compile and execute it.
+
+*******************************************************************************/
+#k1
+#include <stdio.h>
+#include <math.h>
+
+#define MAX_POINTS 100
+#define K 2  // Number of clusters
+
+typedef struct {
+    float x, y;
+    int cluster;
+} Point;
+
+typedef struct {
+    float x, y;
+} Centroid;
+
+// Function to compute Euclidean distance
+float distance(Point p, Centroid c) {
+    return sqrt((p.x - c.x) * (p.x - c.x) + (p.y - c.y) * (p.y - c.y));
+}
+
+// Step 1: Assign points to the nearest centroid
+void assign_clusters(Point points[], Centroid centroids[], int n) {
+    for (int i = 0; i < n; i++) {
+        float min_dist = distance(points[i], centroids[0]);
+        points[i].cluster = 0;
+
+        for (int j = 1; j < K; j++) {
+            float d = distance(points[i], centroids[j]);
+            if (d < min_dist) {
+                min_dist = d;
+                points[i].cluster = j;
+            }
+        }
+    }
+}
+
+// Step 2: Update centroids based on assigned clusters
+void update_centroids(Point points[], Centroid centroids[], int n) {
+    int count[K] = {0};
+    float sum_x[K] = {0}, sum_y[K] = {0};
+
+    for (int i = 0; i < n; i++) {
+        int cluster = points[i].cluster;
+        sum_x[cluster] += points[i].x;
+        sum_y[cluster] += points[i].y;
+        count[cluster]++;
+    }
+
+    for (int j = 0; j < K; j++) {
+        if (count[j] > 0) {
+            centroids[j].x = sum_x[j] / count[j];
+            centroids[j].y = sum_y[j] / count[j];
+        }
+    }
+}
+
+int main() {
+    Point points[MAX_POINTS];
+    Centroid centroids[K];
+    int n, iterations = 5;
+
+    // Input number of points
+    printf("Enter number of data points (max %d): ", MAX_POINTS);
+    scanf("%d", &n);
+
+    // Input data points
+    printf("Enter %d data points (x y):\n", n);
+    for (int i = 0; i < n; i++) {
+        scanf("%f %f", &points[i].x, &points[i].y);
+    }
+
+    // Input initial centroids
+    printf("Enter initial centroid 1 (x y): ");
+    scanf("%f %f", &centroids[0].x, &centroids[0].y);
+
+    printf("Enter initial centroid 2 (x y): ");
+    scanf("%f %f", &centroids[1].x, &centroids[1].y);
+
+    // Run k-means for a fixed number of iterations
+    for (int i = 0; i < iterations; i++) {
+        printf("\n--- Iteration %d ---\n", i + 1);
+
+        assign_clusters(points, centroids, n);
+        update_centroids(points, centroids, n);
+
+        // Print centroids
+        for (int j = 0; j < K; j++) {
+            printf("Centroid %d: (%.2f, %.2f)\n", j + 1, centroids[j].x, centroids[j].y);
+        }
+
+        // Print point assignments
+        for (int j = 0; j < n; j++) {
+            printf("Point (%.2f, %.2f) → Cluster %d\n",
+                   points[j].x, points[j].y, points[j].cluster + 1);
+        }
+    }
+
+    return 0;
+}
+#elbow
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <float.h>
+#include <time.h>
+
+// Structure to represent a data point
+typedef struct {
+    double x;
+    double y;
+} Point;
+
+// Function to calculate Euclidean distance between two points
+double calculateDistance(Point a, Point b) {
+    return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
+}
+
+// Function to assign each point to the nearest centroid
+void assignClusters(Point *points, Point *centroids, int *clusterAssignments, int n, int k) {
+    for (int i = 0; i < n; i++) {
+        double minDistance = DBL_MAX;
+        int closestCluster = 0;
+
+        for (int j = 0; j < k; j++) {
+            double distance = calculateDistance(points[i], centroids[j]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestCluster = j;
+            }
+        }
+
+        clusterAssignments[i] = closestCluster; // FIX: Now inside i-loop
+    }
+}
+
+// Function to update centroids based on current cluster assignments
+void updateCentroids(Point *points, Point *centroids, int *clusterAssignments, int n, int k) {
+    int *clusterSizes = (int *)calloc(k, sizeof(int));
+    Point *newCentroids = (Point *)calloc(k, sizeof(Point));
+
+    for (int i = 0; i < n; i++) {
+        int cluster = clusterAssignments[i];
+        newCentroids[cluster].x += points[i].x;
+        newCentroids[cluster].y += points[i].y;
+        clusterSizes[cluster]++;
+    }
+
+    for (int i = 0; i < k; i++) {
+        if (clusterSizes[i] > 0) {
+            centroids[i].x = newCentroids[i].x / clusterSizes[i];
+            centroids[i].y = newCentroids[i].y / clusterSizes[i];
+        }
+    }
+
+    free(clusterSizes);
+    free(newCentroids);
+}
+
+// Function to calculate SSE
+double calculateSSE(Point *points, Point *centroids, int *clusterAssignments, int n, int k) {
+    double sse = 0.0;
+    for (int i = 0; i < n; i++) {
+        int cluster = clusterAssignments[i];
+        double distance = calculateDistance(points[i], centroids[cluster]);
+        sse += distance * distance;
+    }
+    return sse;
+}
+
+// Function to initialize centroids randomly
+void initializeCentroids(Point *points, Point *centroids, int n, int k) {
+    srand(time(NULL));
+    for (int i = 0; i < k; i++) {
+        int randomIndex = rand() % n;
+        centroids[i] = points[randomIndex];
+    }
+}
+
+// Perform K-Means
+double performKMeans(Point *points, int n, int k, int maxIterations) {
+    Point *centroids = (Point *)malloc(k * sizeof(Point));
+    int *clusterAssignments = (int *)malloc(n * sizeof(int));
+
+    initializeCentroids(points, centroids, n, k);
+
+    for (int iter = 0; iter < maxIterations; iter++) {
+        assignClusters(points, centroids, clusterAssignments, n, k);
+
+        Point *oldCentroids = (Point *)malloc(k * sizeof(Point));
+        for (int i = 0; i < k; i++) {
+            oldCentroids[i] = centroids[i];
+        }
+
+        updateCentroids(points, centroids, clusterAssignments, n, k);
+
+        // Check convergence
+        int converged = 1;
+        for (int i = 0; i < k; i++) {
+            if (calculateDistance(oldCentroids[i], centroids[i]) > 0.0001) {
+                converged = 0;
+                break;
+            }
+        }
+
+        free(oldCentroids);
+
+        if (converged) break;
+    }
+
+    double sse = calculateSSE(points, centroids, clusterAssignments, n, k);
+
+    free(centroids);
+    free(clusterAssignments);
+
+    return sse;
+}
+
+int main() {
+    int n;
+    printf("Enter the number of data points: ");
+    scanf("%d", &n);
+
+    Point *points = (Point *)malloc(n * sizeof(Point));
+
+    printf("Enter the coordinates of each point (x y):\n");
+    for (int i = 0; i < n; i++) {
+        printf("Point %d: ", i + 1);
+        scanf("%lf %lf", &points[i].x, &points[i].y);
+    }
+
+    int maxK;
+    printf("Enter the maximum number of clusters to try (>=2): ");
+    scanf("%d", &maxK);
+
+    if (maxK < 2) {
+        printf("Error: Maximum number of clusters must be at least 2\n");
+        free(points);
+        return 1;
+    }
+
+    double sseValues[maxK - 1];
+
+    printf("\nK\tSSE\n");
+    printf("----------------\n");
+
+    for (int k = 2; k <= maxK; k++) {
+        double sse = performKMeans(points, n, k, 100);
+        sseValues[k - 2] = sse;
+        printf("%d\t%.4f\n", k, sse);
+    }
+
+    double maxCurvature = -DBL_MAX;
+    int optimalK = 2;
+    for (int k = 3; k < maxK; k++) {
+        double curvature = (sseValues[k - 3] - sseValues[k - 2]) -
+                           (sseValues[k - 2] - sseValues[k - 1]);
+        if (curvature > maxCurvature) {
+            maxCurvature = curvature;
+            optimalK = k;
+        }
+    }
+
+    printf("\nOptimal K value (elbow point): %d\n", optimalK);
+
+    free(points);
+    return 0;
+}
+
+#k3
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <float.h>
+#include <time.h>
+
+#define MAX_POINTS 100
+#define MAX_DIM 2
+#define MAX_K 10
+#define MAX_ITER 100
+
+int n_points = 8;
+float data[MAX_POINTS][MAX_DIM] = {
+    {1.0, 2.0}, {1.5, 1.8}, {5.0, 8.0}, {8.0, 8.0},
+    {1.0, 0.6}, {9.0, 11.0}, {8.0, 2.0}, {10.0, 2.0}
+};
+
+// Calculate Euclidean distance
+float calculate_distance(float *a, float *b) {
+    float sum = 0;
+    for (int i = 0; i < MAX_DIM; i++)
+        sum += (a[i] - b[i]) * (a[i] - b[i]);
+    return sqrt(sum);
+}
+
+// Compute new centroids based on labels
+void compute_centroids(float centroids[][MAX_DIM], int k, int *labels) {
+    int count[MAX_K] = {0};
+    float temp[MAX_K][MAX_DIM] = {0};
+
+    for (int i = 0; i < n_points; i++) {
+        int cluster = labels[i];
+        for (int d = 0; d < MAX_DIM; d++)
+            temp[cluster][d] += data[i][d];
+        count[cluster]++;
+    }
+
+    for (int i = 0; i < k; i++) {
+        for (int d = 0; d < MAX_DIM; d++) {
+            if (count[i] > 0)
+                centroids[i][d] = temp[i][d] / count[i];
+        }
+    }
+}
+
+// Calculate SSE
+float calculate_sse(float centroids[][MAX_DIM], int *labels) {
+    float sse = 0;
+    for (int i = 0; i < n_points; i++) {
+        int cluster = labels[i];
+        float dist = calculate_distance(data[i], centroids[cluster]);
+        sse += dist * dist;
+    }
+    return sse;
+}
+
+// Run K-means
+void kmeans(int k, int *iterations_out, float *sse_out, float best_centroids[][MAX_DIM]) {
+    float centroids[MAX_K][MAX_DIM];
+    int labels[MAX_POINTS] = {0};
+    int changed;
+
+    // Random initialization
+    int chosen[MAX_K];
+    for (int i = 0; i < k; i++) {
+        int idx;
+        int unique;
+        do {
+            idx = rand() % n_points;
+            unique = 1;
+            for (int j = 0; j < i; j++) {
+                if (chosen[j] == idx) {
+                    unique = 0;
+                    break;
+                }
+            }
+        } while (!unique);
+        chosen[i] = idx;
+        for (int d = 0; d < MAX_DIM; d++)
+            centroids[i][d] = data[idx][d];
+    }
+
+    int iterations = 0;
+    do {
+        changed = 0;
+        iterations++;
+
+        // Assign points to closest centroid
+        for (int i = 0; i < n_points; i++) {
+            float min_dist = FLT_MAX;
+            int min_idx = -1;
+            for (int j = 0; j < k; j++) {
+                float dist = calculate_distance(data[i], centroids[j]);
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    min_idx = j;
+                }
+            }
+            if (labels[i] != min_idx) {
+                changed = 1;
+                labels[i] = min_idx;
+            }
+        }
+
+        // Update centroids
+        compute_centroids(centroids, k, labels);
+
+    } while (changed && iterations < MAX_ITER);
+
+    *iterations_out = iterations;
+    *sse_out = calculate_sse(centroids, labels);
+
+    // Copy centroids to output
+    for (int i = 0; i < k; i++)
+        for (int d = 0; d < MAX_DIM; d++)
+            best_centroids[i][d] = centroids[i][d];
+}
+
+int main() {
+    int k;
+    printf("Enter number of clusters (k): ");
+    scanf("%d", &k);
+
+    srand(time(NULL));
+
+    float min_sse = FLT_MAX;
+    int best_run = -1;
+    int best_iterations = 0;
+    float best_centroids[MAX_K][MAX_DIM];
+
+    for (int run = 1; run <= 3; run++) {
+        int iterations;
+        float sse;
+        float centroids[MAX_K][MAX_DIM];
+
+        kmeans(k, &iterations, &sse, centroids);
+
+        printf("\n--- Execution %d ---\n", run);
+        printf("Iterations: %d\n", iterations);
+        printf("SSE: %.4f\n", sse);
+        printf("Centroids:\n");
+        for (int i = 0; i < k; i++)
+            printf("Centroid %d: (%.2f, %.2f)\n", i + 1, centroids[i][0], centroids[i][1]);
+
+        if (sse < min_sse) {
+            min_sse = sse;
+            best_run = run;
+            best_iterations = iterations;
+            for (int i = 0; i < k; i++)
+                for (int d = 0; d < MAX_DIM; d++)
+                    best_centroids[i][d] = centroids[i][d];
+        }
+    }
+
+    printf("\n=== Best Run Summary ===\n");
+    printf("Best Execution: %d\n", best_run);
+    printf("Iterations: %d\n", best_iterations);
+    printf("Lowest SSE: %.4f\n", min_sse);
+    printf("Best Centroids:\n");
+    for (int i = 0; i < k; i++)
+        printf("Centroid %d: (%.2f, %.2f)\n", i + 1, best_centroids[i][0], best_centroids[i][1]);
+
+    return 0;
+}
+
+#dbscan
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#define MAX_POINTS 100
+#define UNCLASSIFIED -1
+#define NOISE -2
+
+typedef struct {
+    double x, y;
+    int cluster;
+} Point;
+
+Point points[MAX_POINTS];
+int numPoints;
+double epsilon;
+int minPts;
+
+double distance(Point a, Point b) {
+    return sqrt((a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y));
+}
+
+int regionQuery(int pointIdx, int *neighbors) {
+    int count = 0;
+    for (int i = 0; i < numPoints; i++) {
+        if (distance(points[pointIdx], points[i]) <= epsilon)
+            neighbors[count++] = i;
+    }
+    return count;
+}
+int expandCluster(int pointIdx, int clusterId) {
+    int neighbors[MAX_POINTS];
+    int neighborCount = regionQuery(pointIdx, neighbors);
+
+    if (neighborCount < minPts) {
+        points[pointIdx].cluster = NOISE;
+        return 0;
+    }
+
+    points[pointIdx].cluster = clusterId;
+
+    for (int i = 0; i < neighborCount; i++) {
+        int curr = neighbors[i];
+        if (points[curr].cluster == UNCLASSIFIED || points[curr].cluster == NOISE) {
+            points[curr].cluster = clusterId;
+
+            int newNeighbors[MAX_POINTS];
+            int newCount = regionQuery(curr, newNeighbors);
+            if (newCount >= minPts) {
+                for (int j = 0; j < newCount; j++) {
+                    int alreadyIn = 0;
+                    for (int k = 0; k < neighborCount; k++) {
+                        if (neighbors[k] == newNeighbors[j]) {
+                            alreadyIn = 1;
+                            break;
+                        }
+                    }
+                    if (!alreadyIn) {
+  neighbors[neighborCount++] = newNeighbors[j];
+                    }
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
+void dbscan() {
+    int clusterId = 1;
+    for (int i = 0; i < numPoints; i++) {
+        if (points[i].cluster == UNCLASSIFIED) {
+            if (expandCluster(i, clusterId)) {
+                clusterId++;
+            }
+        }
+    }
+}
+
+void printResults() {
+    printf("\nDBSCAN Clustering Result:\n");
+    for (int i = 0; i < numPoints; i++) {
+        printf("Point (%.2f, %.2f) => ", points[i].x, points[i].y);
+        if (points[i].cluster == NOISE)
+            printf("Noise\n");
+        else
+            printf("Cluster %d\n", points[i].cluster);
+    }
+}
+
+int main() {
+    printf("Enter number of points (max %d): ", MAX_POINTS);
+    scanf("%d", &numPoints);
+    if (numPoints > MAX_POINTS) {
+        printf("Exceeded max limit.\n");
+        return 1;
+    }
+
+    printf("Enter coordinates of %d points (x y):\n", numPoints);
+    for (int i = 0; i < numPoints; i++) {
+        scanf("%lf %lf", &points[i].x, &points[i].y);
+        points[i].cluster = UNCLASSIFIED;
+    }
+
+    printf("Enter epsilon (e.g. 3.00): ");
+    scanf("%lf", &epsilon);
+    printf("Enter minPts (e.g. 2): ");
+    scanf("%d", &minPts);
+
+    dbscan();
+    printResults();
+
+   return 0;
+}
+
